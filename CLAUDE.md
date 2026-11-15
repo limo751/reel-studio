@@ -4,7 +4,7 @@ Web-App (PWA) fürs iPhone, Nachfolger der iOS-App in `../Reel Studio iOS`. Glei
 
 ## Technik
 - Vite + TypeScript + Preact (+ @preact/signals). Video: **mediabunny** (Demux/Decode/Encode/MP4 über WebCodecs). Bild: WebGL2. Ton: Web Audio (OfflineAudioContext).
-- Alles läuft im Browser; keine Server. Veröffentlicht über GitHub Pages (`.github/workflows/deploy.yml`, `BASE_PATH=/<repo>/`).
+- Alles läuft im Browser; keine Server. Veröffentlicht über GitHub Pages: `npm run deploy` (`scripts/deploy.sh`) baut mit `BASE_PATH=/<repo>/` und schiebt `dist/` auf den Branch `gh-pages`. Repo: github.com/limo751/reel-studio (öffentlich). Der gh-Login hat keinen `workflow`-Scope, deshalb keine GitHub Actions.
 - Daten in IndexedDB (`src/model/db.ts`): Projekte, Medien-Metadaten, Dateiinhalte (Blobs), Analysen, Vorschaubilder.
 
 ## Aufbau (Swift-Vorlage in Klammern)

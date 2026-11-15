@@ -16,4 +16,5 @@ Läuft direkt in Safari auf dem iPhone. Kein Xcode, kein Neuinstallieren nach 7 
 ## Gut zu wissen
 - Fotos, Videos und Musik werden in den Speicher der App kopiert und verlassen das iPhone nicht.
 - Für Titel-Vorschläge mit Ortsnamen wird – nur auf Knopfdruck – der ungefähre Aufnahmeort an OpenStreetMap gesendet.
-- Updates kommen automatisch: Beim nächsten Öffnen mit Internet lädt die App die neue Version.
+- Neue Version veröffentlichen (auf dem Mac): `npm run deploy`.
+- Updates kommen automatisch aufs iPhone: Beim nächsten Öffnen mit Internet lädt die App die neue Version.
