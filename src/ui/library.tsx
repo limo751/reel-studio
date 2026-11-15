@@ -6,9 +6,9 @@ import {
   removeFromFolder, renameFolder, songs, type Folder, type MediaItem,
 } from '../media/library';
 import { requestPersistence, storageEstimate } from '../model/db';
-import { Card, Icon, Note, Sheet, Thumb, canPickDirectory, formatTime, pickFiles, showToast } from './components';
+import { Card, Icon, Note, Sheet, Thumb, askName, canPickDirectory, formatTime, pickFiles, showToast } from './components';
 
-const MEDIA_ACCEPT = 'video/*,image/*,.mov,.mp4,.m4v,.heic,.heif,.jpg,.jpeg,.png';
+const MEDIA_ACCEPT = 'video/*,image/*,.mov,.mp4,.m4v,.heic,.heif,.jpg,.jpeg,.png,.bmp,.webp,.gif,.tif,.tiff';
 const AUDIO_ACCEPT = 'audio/*,.mp3,.m4a,.aac,.wav,.aif,.aiff';
 
 export function ImportProgress() {
@@ -45,8 +45,8 @@ export async function importMusic() {
 }
 
 export async function newFolderWithImport(): Promise<Folder | null> {
-  const name = prompt('Name des Ordners (z. B. „Kreta 2026“)');
-  if (!name?.trim()) return null;
+  const name = await askName('Name des neuen Ordners (z. B. „Kreta 2026“)');
+  if (!name) return null;
   const f = await createFolder(name);
   await importMediaInto(f.id);
   return f;
@@ -136,7 +136,7 @@ function FolderSheet({ folder, onClose }: { folder: Folder; onClose: () => void 
         </div>
         {editing && (
           <div class="row wrap">
-            <button class="btn" onClick={() => { const n = prompt('Neuer Name', folder.name); if (n) void renameFolder(folder.id, n); }}>Umbenennen</button>
+            <button class="btn" onClick={async () => { const n = await askName('Ordner umbenennen', folder.name); if (n) { await renameFolder(folder.id, n); showToast(`Umbenannt in „${n}“`); } }}>Umbenennen</button>
             <button class="btn danger" onClick={() => { if (confirm(`Ordner „${folder.name}“ mit allen ${items.length} Dateien aus der App löschen? Die Originale in der Dateien-App bleiben erhalten.`)) { void deleteFolder(folder.id); onClose(); } }}>Ordner löschen</button>
           </div>
         )}

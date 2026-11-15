@@ -1,11 +1,12 @@
 // Tab „Bereiche“ – entspricht UI/AreasTab.swift.
 import { useEffect, useState } from 'preact/hooks';
 import { applyRhythm } from '../engine/planner';
-import { media } from '../media/library';
+import { MAX_SPEED, clipRamp, fitRamp, rampSource } from '../engine/ramp';
+import { folders, media } from '../media/library';
 import type { Editor } from '../model/editor';
 import {
   AREA_KINDS, AREA_KIND_LABEL, END_BEHAVIOR_LABEL, TRANSITION_KINDS, TRANSITION_LABEL, defaultCrop, layoutRects,
-  type Area, type Crop, type EndBehavior, type TransitionSpec,
+  type Area, type Crop, type EndBehavior, type ReelClip, type TransitionSpec,
 } from '../model/project';
 import { AreaPicker, Card, ColorRow, Icon, Note, Seg, Select, Slider, Stepper, Thumb, Toggle, formatTime } from './components';
 import { CropEditor } from './crop';
@@ -133,7 +134,7 @@ function ReelSection({ ed, index, onSheet, onCrop }: { ed: Editor; index: number
         <button class="row" style="background:none;border:0;padding:0;text-align:left" onClick={() => onSheet('album')}>
           <Thumb id={reel.clips[0]?.assetID} size={56} />
           <div style="flex:1">
-            <div style="font-weight:600">{reel.albumName ?? 'Kein Ordner gewählt'}</div>
+            <div style="font-weight:600">{folders.value.find((f) => f.id === reel.albumID)?.name ?? reel.albumName ?? 'Kein Ordner gewählt'}</div>
             <div class="note">{reel.clips.length} Clips im Schnittplan</div>
           </div>
           <span class="chev"><Icon name="chevron" size={18} /></span>
@@ -199,13 +200,14 @@ function ClipRow({ ed, areaIndex, clipIndex, onCrop }: { ed: Editor; areaIndex: 
         <Thumb id={clip.assetID} size={54} />
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:15px">{clip.beats} Beats · {formatTime(clip.beats * ed.grid.value.period)}</div>
-          <div class="note">{clip.isPhoto ? 'Foto' : `Video ${formatTime(srcDur)}`}</div>
+          <div class="note">{clip.isPhoto ? 'Foto' : `Video ${formatTime(srcDur)}`}{(clip.speed ?? 1) > 1 && <span class="accent"> · Tempo bis {fmtSpeed(clip.speed!)}</span>}</div>
           {!isLast && <div class="note accent">→ {TRANSITION_LABEL[clip.transition.kind]}</div>}
         </div>
         <span onClick={(e) => e.stopPropagation()}><Stepper value={clip.beats} min={1} max={32} onChange={(v) => set((c) => { c.beats = v; })} /></span>
       </div>
       {open && (
         <>
+          {!clip.isPhoto && <SpeedRamp clip={clip} length={clip.beats * ed.grid.value.period} srcDur={srcDur} onChange={(fn) => set(fn)} />}
           {!clip.isPhoto && srcDur > 1 && (
             <>
               <Slider title="Stelle im Clip (auf dem Beat)" value={clip.sourceStart} min={0} max={Math.max(0.1, srcDur - 0.3)} step={0.1} format={formatTime}
@@ -229,6 +231,43 @@ function ClipRow({ ed, areaIndex, clipIndex, onCrop }: { ed: Editor; areaIndex: 
         </>
       )}
     </div>
+  );
+}
+
+const fmtSpeed = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ',')) + '×';
+const fmtSec = (v: number) => v.toFixed(1).replace('.', ',') + ' s';
+
+/** Tempo-Rampe: auf bis zu 10× beschleunigen, mit sanftem Ein- und Ausblenden der Geschwindigkeit. */
+function SpeedRamp({ clip, length, srcDur, onChange }: {
+  clip: ReelClip; length: number; srcDur: number; onChange: (fn: (c: ReelClip) => void) => void;
+}) {
+  const speed = clip.speed ?? 1;
+  const rampIn = clip.rampIn ?? 0.5, rampOut = clip.rampOut ?? 0.5;
+  const ramp = clipRamp(clip, length);
+  const need = ramp ? rampSource(ramp, length) : length;
+  const maxRamp = Math.max(0.1, Math.round(length * 10) / 10);
+  return (
+    <>
+      <Slider title="Tempo-Rampe (Speed Ramp)" value={speed} min={1} max={MAX_SPEED} step={0.5} format={fmtSpeed} reset={1}
+        onInput={(v) => onChange((c) => { c.speed = v; c.rampIn ??= 0.5; c.rampOut ??= 0.5; })} />
+      {speed > 1 && (
+        <>
+          <Slider title="Beschleunigen (Fade-in)" value={Math.min(rampIn, maxRamp)} min={0} max={maxRamp} step={0.1} format={fmtSec}
+            onInput={(v) => onChange((c) => { c.rampIn = v; })} />
+          <Slider title="Abbremsen (Fade-out)" value={Math.min(rampOut, maxRamp)} min={0} max={maxRamp} step={0.1} format={fmtSec}
+            onInput={(v) => onChange((c) => { c.rampOut = v; })} />
+          <Note>Der Clip startet normal, wird sanft bis {fmtSpeed(speed)} schneller und bremst zum Schnitt wieder ab. Dafür werden {fmtSec(need)} Videomaterial in {fmtSec(length)} gezeigt. Der Originalton dieses Clips wird dabei stummgeschaltet.</Note>
+          {ramp && need > srcDur - clip.sourceStart + 0.05 && (() => {
+            const fit = fitRamp(ramp, Math.max(0, srcDur - clip.sourceStart));
+            return (
+              <Note kind="warn">Ab dieser Stelle hat der Clip nur {fmtSec(Math.max(0, srcDur - clip.sourceStart))} Material.{' '}
+                {fit ? `Das Tempo wird deshalb auf ${fmtSpeed(Math.floor(fit.speed * 10) / 10)} begrenzt.` : 'Er läuft deshalb ohne Beschleunigung.'}{' '}
+                Für mehr Tempo eine frühere Stelle oder ein längeres Video wählen.</Note>
+            );
+          })()}
+        </>
+      )}
+    </>
   );
 }
 

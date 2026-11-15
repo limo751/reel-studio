@@ -3,6 +3,7 @@
 // außerdem Titel, Trennlinien und die Ton-Hüllkurven (Musik, Originalton, Ducking).
 import { BeatGrid, type BeatAnalysis } from './beats';
 import { resolve, visibleEnd, visibleStart } from './planner';
+import { clipRamp, fitRamp, rampSource, type Ramp } from './ramp';
 import {
   dividerPixels, layoutRects, renderSize, titleVisible,
   type AreaKind, type Crop, type Look, type Project, type Rect, type RGBA, type TitleSpec, type TransitionKind,
@@ -10,7 +11,7 @@ import {
 
 /** Abbildung Zeitachse → Quellzeit eines Videos. */
 export type TimeMap =
-  | { mode: 'linear'; insertAt: number; srcStart: number; rate: number; srcMax: number }
+  | { mode: 'linear'; insertAt: number; srcStart: number; rate: number; srcMax: number; ramp?: Ramp | null }
   | { mode: 'loop'; start: number; srcDur: number }
   | { mode: 'freeze'; start: number; srcDur: number }
   | { mode: 'slow'; start: number; avail: number; duration: number };
@@ -66,7 +67,10 @@ export interface RenderPlan {
 /** Quellzeit eines Video-Segments zum Zeitpunkt t (Sekunden auf der Zeitachse). */
 export function sourceTime(m: TimeMap, t: number): number {
   switch (m.mode) {
-    case 'linear': return Math.min(m.srcMax, m.srcStart + Math.max(0, t - m.insertAt) * m.rate);
+    case 'linear': {
+      const u = Math.max(0, t - m.insertAt);
+      return Math.min(m.srcMax, m.srcStart + (m.ramp ? rampSource(m.ramp, u) : u) * m.rate);
+    }
     case 'loop': {
       // erster Durchlauf ab `start`, danach von vorn
       const first = m.srcDur - m.start;
@@ -158,17 +162,24 @@ export function buildPlan(project: Project, analysis: BeatAnalysis | null, media
         const srcDur = media.duration(seg.assetID) || area.reel.clips[seg.clipIndex]?.sourceDuration || 0;
         const insertAt = Math.max(start, trackEnds[lane]);
         const wanted = end - insertAt;
+        const clip = area.reel.clips[seg.clipIndex];
         const srcStart = Math.min(seg.sourceStart + (insertAt - start), Math.max(0, srcDur - 0.1));
-        const availLen = Math.min(wanted, srcDur - srcStart);
+        // Zu wenig Material für das volle Tempo → Höchsttempo begrenzen (Start und Ende bleiben bei 1×)
+        const wish = clip ? clipRamp(clip, wanted) : null;
+        const ramp = wish ? fitRamp(wish, srcDur - srcStart) : null;
+        const needSrc = ramp ? rampSource(ramp, wanted) : wanted;
+        const availLen = Math.min(needSrc, srcDur - srcStart);
         if (availLen <= 0.02) return;
-        const rate = availLen < wanted - 0.02 ? availLen / wanted : 1;
+        // Reicht das Material nicht, wird der Clip gleichmäßig gestreckt (wie scaleTimeRange in der App)
+        const rate = availLen < needSrc - 0.02 ? availLen / needSrc : 1;
         trackEnds[lane] = insertAt + wanted;
         segments.push({
           assetID: seg.assetID, isPhoto: false, visibleStart: start, visibleEnd: end, cutIn: seg.cutIn,
           inTransition: seg.inTransition, inDuration: seg.inDuration, crop: seg.crop, kenBurns: false,
-          time: { mode: 'linear', insertAt, srcStart, rate, srcMax: srcDur }, autoAt: srcStart + availLen / 2,
+          time: { mode: 'linear', insertAt, srcStart, rate, srcMax: srcDur, ramp }, autoAt: srcStart + availLen / 2,
         });
-        if (audioOn && seg.volume > 0 && media.hasAudio?.(seg.assetID) !== false) {
+        // Beschleunigte Clips laufen ohne Originalton (er würde verzerrt klingen)
+        if (!ramp && audioOn && seg.volume > 0 && media.hasAudio?.(seg.assetID) !== false) {
           const v = area.audio.volume * seg.volume;
           const fin = Math.max(0.05, seg.inDuration), fout = Math.max(0.05, seg.outDuration);
           audio.push({

@@ -109,6 +109,9 @@ export interface ReelClip {
   transition: TransitionSpec;  // Übergang zum nächsten Clip
   volume: number;
   crop: Crop;
+  speed?: number;    // Tempo-Rampe: Zieltempo 1 … 10 (fehlt = 1)
+  rampIn?: number;   // Sekunden zum Beschleunigen (Fade-in)
+  rampOut?: number;  // Sekunden zum Abbremsen (Fade-out)
 }
 
 export type EndBehavior = 'loop' | 'freeze' | 'slow';

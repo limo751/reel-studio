@@ -1,5 +1,6 @@
 // Liefert für den Export Bild für Bild die passenden Video-/Fotoframes (frame-genau über WebCodecs).
 import { ALL_FORMATS, BlobSource, Input, VideoSampleSink, type InputVideoTrack, type VideoSample } from 'mediabunny';
+import { decodeImage } from '../media/image';
 import { getBlob } from '../media/library';
 import type { FrameSource } from './gl/renderer';
 import { sourceTime, type RenderPlan, type SegmentRender } from './timeline';
@@ -8,13 +9,7 @@ const MAX_SIDE = 2160;
 
 /** Foto laden (verkleinert auf max. 2400 px, Ausrichtung aus EXIF). */
 export async function loadPhoto(assetID: string): Promise<ImageBitmap> {
-  const blob = await getBlob(assetID);
-  const probe = await createImageBitmap(blob);
-  const s = Math.min(1, 2400 / Math.max(probe.width, probe.height));
-  if (s >= 1) return probe;
-  const w = Math.round(probe.width * s), h = Math.round(probe.height * s);
-  probe.close();
-  return createImageBitmap(blob, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
+  return decodeImage(await getBlob(assetID), 2400);
 }
 
 export const isActive = (s: SegmentRender, t: number) => t >= s.visibleStart - 0.0001 && t < s.visibleEnd;

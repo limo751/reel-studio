@@ -1,7 +1,7 @@
 // App-Rahmen: einfache Navigation über den URL-Hash (Zurück-Geste funktioniert).
 import { useEffect, useState } from 'preact/hooks';
 import { projects } from '../model/store';
-import { toast } from './components';
+import { NameDialogHost, toast } from './components';
 import { EditorView } from './editor';
 import { LibraryScreen } from './library';
 import { ProjectList } from './projects';
@@ -37,6 +37,7 @@ export function App() {
   return (
     <>
       {content}
+      <NameDialogHost />
       {toast.value && <div class="toast">{toast.value}</div>}
     </>
   );

@@ -1,5 +1,6 @@
 // Schnittplanung – Port von Engine/Planner.swift.
 import type { BeatGrid } from './beats';
+import { clipRamp, rampSource } from './ramp';
 import { defaultCrop, uid, type Crop, type ReelClip, type ReelSlot, type TransitionKind, type TransitionSpec } from '../model/project';
 
 /** Minimalinfo zu einem Medium. */
@@ -113,8 +114,11 @@ export function resolve(reel: ReelSlot, grid: BeatGrid, duration: number): Timel
       sourceStart: 0, sourceDuration: 0, volume: clip.volume, crop: clip.crop,
     };
     if (!clip.isPhoto) {
-      const need = visibleEnd(seg) - visibleStart(seg);
-      let s = clip.sourceStart - seg.inDuration / 2;
+      // Mit Tempo-Rampe wird mehr Material verbraucht als Zeit vergeht
+      const len = visibleEnd(seg) - visibleStart(seg);
+      const ramp = clipRamp(clip, len);
+      const need = ramp ? rampSource(ramp, len) : len;
+      let s = clip.sourceStart - (ramp ? rampSource(ramp, seg.inDuration / 2) : seg.inDuration / 2);
       if (s + need > clip.sourceDuration) s = clip.sourceDuration - need;
       s = Math.max(0, s);
       seg.sourceStart = s;

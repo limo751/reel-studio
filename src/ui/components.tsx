@@ -1,7 +1,7 @@
 // Grundbausteine der Oberfläche – entsprechen UI/Components.swift.
 import { signal } from '@preact/signals';
 import type { ComponentChildren, JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { media, thumbnailURL } from '../media/library';
 import { layoutRects, type AspectFormat, type RGBA } from '../model/project';
 
@@ -261,3 +261,40 @@ export const canPickDirectory = (() => {
   const mobile = /iPhone|iPad|iPod|Android/.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
   return !mobile && 'webkitdirectory' in document.createElement('input');
 })();
+
+// MARK: Namens-Eingabe (statt window.prompt, das in der Home-Bildschirm-App unzuverlässig ist)
+
+const nameRequest = signal<{ title: string; value: string; resolve: (v: string | null) => void } | null>(null);
+
+/** Fragt nach einem Namen. Liefert null bei Abbruch oder leerer Eingabe. */
+export function askName(title: string, initial = ''): Promise<string | null> {
+  return new Promise((resolve) => { nameRequest.value = { title, value: initial, resolve }; });
+}
+
+export function NameDialogHost() {
+  const req = nameRequest.value;
+  const [text, setText] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!req) return;
+    setText(req.value);
+    setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select(); }, 50);
+  }, [req]);
+  if (!req) return null;
+  const finish = (v: string | null) => {
+    nameRequest.value = null;
+    req.resolve(v && v.trim() ? v.trim() : null);
+  };
+  return (
+    <div class="sheet-back" style="align-items:center" onClick={(e) => { if (e.target === e.currentTarget) finish(null); }}>
+      <form class="card" style="width:min(92vw,420px)" onSubmit={(e) => { e.preventDefault(); finish(text); }}>
+        <h3>{req.title}</h3>
+        <input ref={inputRef} type="text" value={text} onInput={(e) => setText((e.target as HTMLInputElement).value)} />
+        <div class="row">
+          <button type="button" class="btn" style="flex:1" onClick={() => finish(null)}>Abbrechen</button>
+          <button type="submit" class="btn primary" style="flex:1" disabled={!text.trim()}>Sichern</button>
+        </div>
+      </form>
+    </div>
+  );
+}

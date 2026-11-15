@@ -5,6 +5,7 @@ import { signal } from '@preact/signals';
 import { ALL_FORMATS, BlobSource, Input, VideoSampleSink } from 'mediabunny';
 import { dbAll, dbDelete, dbGet, dbPut } from '../model/db';
 import { uid } from '../model/project';
+import { decodeImage } from './image';
 import { readCaptureInfo } from './metadata';
 
 export interface MediaItem {
@@ -32,7 +33,7 @@ export const luts = signal<LUTFile[]>([]);
 export const importState = signal<{ label: string; done: number; total: number } | null>(null);
 
 const VIDEO_EXT = ['mov', 'mp4', 'm4v', '3gp', 'webm', 'mkv'];
-const PHOTO_EXT = ['jpg', 'jpeg', 'heic', 'heif', 'png', 'webp', 'avif', 'gif', 'tif', 'tiff'];
+const PHOTO_EXT = ['jpg', 'jpeg', 'jpe', 'jfif', 'heic', 'heif', 'png', 'bmp', 'dib', 'webp', 'avif', 'gif', 'tif', 'tiff'];
 const AUDIO_EXT = ['mp3', 'm4a', 'aac', 'wav', 'aif', 'aiff', 'caf', 'flac', 'ogg'];
 
 const ext = (name: string) => name.split('.').pop()?.toLowerCase() ?? '';
@@ -156,7 +157,7 @@ async function probeMedia(file: File, folderId: string): Promise<MediaItem> {
     created: cap.date ?? (file.lastModified || null), lat: cap.lat, lon: cap.lon,
   };
   if (isPhoto) {
-    const bmp = await createImageBitmap(file);
+    const bmp = await decodeImage(file);
     item.width = bmp.width;
     item.height = bmp.height;
     bmp.close();
@@ -232,7 +233,7 @@ async function makeThumbnail(item: MediaItem, size = 240, height = size): Promis
   const ctx = canvas.getContext('2d')!;
   const src = await getBlob(item.id);
   if (item.isPhoto) {
-    const bmp = await createImageBitmap(src);
+    const bmp = await decodeImage(src, 1200);
     drawCover(ctx, bmp, bmp.width, bmp.height, size, height);
     bmp.close();
   } else {

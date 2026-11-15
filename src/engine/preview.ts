@@ -9,6 +9,7 @@ import { lutMap, makePlan } from './exporter';
 import { isActive, loadPhoto } from './frames';
 import { Renderer, type FrameSource } from './gl/renderer';
 import { audioContext } from './music';
+import { rampVelocity } from './ramp';
 import { sourceTime, type RenderPlan, type SegmentRender } from './timeline';
 
 const PREVIEW_SCALE = 0.5;
@@ -205,12 +206,16 @@ export class Preview {
       const target = sourceTime(seg.time, visible ? t : seg.visibleStart);
       const el = v.el;
       if (visible && this.playing.value) {
-        const rate = seg.time.mode === 'linear' ? seg.time.rate : seg.time.mode === 'slow' ? seg.time.avail / seg.time.duration : 1;
-        if (Math.abs(el.playbackRate - rate) > 0.01) el.playbackRate = Math.max(0.1, rate);
-        const frozen = seg.time.mode === 'freeze' && target >= seg.time.srcDur - 0.05;
-        if (frozen) { if (!el.paused) el.pause(); }
+        const m = seg.time;
+        let rate = m.mode === 'linear' ? m.rate : m.mode === 'slow' ? m.avail / m.duration : 1;
+        if (m.mode === 'linear' && m.ramp) rate *= rampVelocity(m.ramp, t - m.insertAt);
+        rate = Math.min(16, Math.max(0.1, rate));
+        if (Math.abs(el.playbackRate - rate) > 0.01) el.playbackRate = rate;
+        const frozen = (m.mode === 'freeze' && target >= m.srcDur - 0.05) || (m.mode === 'linear' && target >= m.srcMax - 0.05);
+        if (frozen) { if (!el.paused) el.pause(); if (Math.abs(el.currentTime - target) > 0.1) el.currentTime = target; }
         else if (el.paused) { el.currentTime = target; void el.play().catch(() => {}); }
-        else if (Math.abs(el.currentTime - target) > 0.25) el.currentTime = target;
+        // Toleranz wächst mit dem Tempo, sonst würde bei 10× ständig neu gesucht
+        else if (Math.abs(el.currentTime - target) > 0.25 * Math.max(1, rate)) el.currentTime = target;
       } else {
         if (!el.paused) el.pause();
         if (forceSeek || Math.abs(el.currentTime - target) > 0.04) el.currentTime = target;
